@@ -13,6 +13,7 @@ governing permissions and limitations under the License.
 const Oauth1a = require('oauth-1.0a')
 const crypto = require('crypto')
 const got = require('got')
+const fetch = require("node-fetch");
 
 /**
  * This function return the Adobe commerce OAuth client
@@ -69,14 +70,21 @@ function getOauthClient (options, logger) {
           : oauth.toHeader(oauth.authorize(requestData, token))),
         ...customHeaders
       }
-
-      return await got(requestData.url, {
-        http2: true,
+      logger.info(JSON.stringify(requestData.body))
+      logger.info(JSON.stringify(headers))
+      const response =  await fetch(requestData.url, {
         method: requestData.method,
-        headers,
-        body: requestData.body,
-        responseType: 'json'
-      }).json()
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json' // 确保设置 Content-Type 头
+        },
+        body: JSON.stringify(requestData.body) // 转换 body 为 JSON 字符串
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json(); // 解析 JSON 响应
+
     } catch (error) {
       logger.error(`Error fetching URL ${requestData.url}: ${error}`)
       throw error
@@ -151,7 +159,47 @@ function getCommerceOauthClient (options, logger) {
   return getOauthClient(options, logger)
 }
 
+/**
+ * Converts a search criteria object into a query string format.
+ * @param {object} searchCriteria - The search criteria object to convert.
+ * @param {string} [parentKey=''] - The parent key to use for nested objects.
+ * @returns {string} The query string representation of the search criteria.
+ */
+function convertSearchCriteriaToString(searchCriteria, parentKey = '') {
+  if (typeof searchCriteria !== 'object' || searchCriteria === null) {
+    // Handle non-object values
+    return `${parentKey}=${encodeURIComponent(searchCriteria)}`;
+  }
+
+  let queryString = '';
+
+  for (const key in searchCriteria) {
+    if (searchCriteria.hasOwnProperty(key)) {
+      const value = searchCriteria[key];
+      const newKey = parentKey ? `${parentKey}[${key}]` : key;
+
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          queryString += convertSearchCriteriaToString(value[i], `${newKey}[${i}]`) + '&';
+        }
+      } else if (typeof value === 'object' && value !== null) {
+        queryString += convertSearchCriteriaToString(value, newKey) + '&';
+      } else {
+        queryString += `${newKey}=${encodeURIComponent(value)}&`;
+      }
+    }
+  }
+
+  // Remove the trailing "&" if it exists
+  if (queryString.endsWith('&')) {
+    queryString = queryString.slice(0, -1);
+  }
+
+  return queryString;
+}
+
 module.exports = {
   getOauthClient,
-  getCommerceOauthClient
+  getCommerceOauthClient,
+  convertSearchCriteriaToString
 }

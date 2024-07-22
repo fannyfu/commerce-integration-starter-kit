@@ -108,7 +108,68 @@ function checkMissingRequestInputs (
   return errorMessage
 }
 
-module.exports = {
-  stringParameters,
-  checkMissingRequestInputs
+/**
+ *
+ * Extracts the bearer token string from the Authorization header in the request parameters.
+ *
+ * @param {object} params action input parameters.
+ *
+ * @returns {string|undefined} the token string or undefined if not set in request headers.
+ *
+ */
+function getBearerToken (params) {
+  if (params.__ow_headers &&
+      params.__ow_headers.authorization &&
+      params.__ow_headers.authorization.startsWith('Bearer ')) {
+    return params.__ow_headers.authorization.substring('Bearer '.length)
+  }
+  return undefined
 }
+/**
+ *
+ * Returns an error response object and attempts to log.info the status code and error message
+ *
+ * @param {number} statusCode the error status code.
+ *        e.g. 400
+ * @param {string} message the error message.
+ *        e.g. 'missing xyz parameter'
+ * @param {*} [logger] an optional logger instance object with an `info` method
+ *        e.g. `new require('@adobe/aio-sdk').Core.Logger('name')`
+ *
+ * @returns {object} the error object, ready to be returned from the action main's function.
+ *
+ */
+function errorResponse (statusCode, message, logger) {
+  if (logger && typeof logger.info === 'function') {
+    logger.info(`${statusCode}: ${message}`)
+  }
+  return {
+    error: {
+      statusCode,
+      body: {
+        error: message
+      }
+    }
+  }
+}
+
+function fromCamelCase(strInput, prefix) {
+  let field_name = strInput.replace(prefix, '');
+  field_name = "XXX" + field_name;
+  const regex = /([A-Z][A-Z0-9]*(?=$|[A-Z][a-z0-9])|[A-Za-z][a-z0-9]+)/g;
+  const matches = field_name.match(regex);
+  const ret = matches.map(function(match) {
+    return match === match.toUpperCase() ? match.toLowerCase() : match.charAt(0).toLowerCase() + match.slice(1);
+  });
+  let new_field_name = ret.join('_').replace(/^xxx_/, '');
+  return new_field_name.replace(/xxx/, '');
+}
+
+module.exports = {
+  errorResponse,
+  getBearerToken,
+  stringParameters,
+  checkMissingRequestInputs,
+  fromCamelCase
+}
+
