@@ -52,8 +52,9 @@ async function main(params) {
         const compaycontactsync = companyContactSync(oauth, logger)
         const processcontrol = processControl(oauth, logger)
 
-        // Check if any products need to be synced
+        // Check if any companies need to be synced
         let currentPage = 1
+        // let pageSize = constants.CC_SYNC_STG_TO_AC_BATCH_COUNT
         let pageSize = constants.CC_SYNC_STG_TO_AC_BATCH_COUNT
         let stgCompanies = await compaycontactsync.getCompanies(pageSize, currentPage)
         const totalCount = stgCompanies["total_count"];
@@ -84,46 +85,75 @@ async function main(params) {
                 constants.CC_SYNC_STG_TO_AC,
                 "Retrieving company contact from AC staging to create/update in AC"
             )
-            const custAdminContactMapping = {};
-            const contactfilters = [];
+            let custAdminContactMapping = {};
+            let contactfilters = [];
             stgCompanies.items.forEach(stgCompany => {
                 custAdminContactMapping[stgCompany.cust_id] = stgCompany.web_admin_contact_id;
             });
+            logger.info('1111111111111111' + JSON.stringify(custAdminContactMapping))
             //add admin contact get filter
-            let syncStatuses = ['N']
-            let statusfilter = {
-                "field": "sync_status",
-                "value": syncStatuses.join(","),
-                "condition_type": "in"
-            };
-            contactfilters.push(statusfilter);
+            // let syncStatuses = ['N']
+            // let statusfilter = {
+            //     "field": "sync_status",
+            //     "value": syncStatuses.join(","),
+            //     "condition_type": "in"
+            // };
+            // contactfilters.push(statusfilter);
             let contactIdfilter = {
                 "field": "contact_id",
                 "value": Object.values(custAdminContactMapping).join(','),
                 "condition_type": "in"
             };
             contactfilters.push(contactIdfilter);
-            let adminContacts = await compaycontactsync.getContacts(pageSize, currentPage,contactfilters);
+            let adminContacts = await compaycontactsync.getContacts(100, 1,contactfilters);
 
-            let ContactCustomerMapping = await compaycontactsync.updateAdminContactToAc(adminContacts["items"], custAdminContactMapping)
-            logger.info(JSON.stringify(ContactCustomerMapping))
-            return ContactCustomerMapping
-            // let attributesMapping = await compaycontactsync.updateProductMasterToAc(productMasters["items"], attributeMappings?.attributes)
-            // let processedPage = 1
-            // while (
-            //     retrievedCount < totalCount &&
-            //     retrievedCount < constants.CC_SYNC_STG_TO_AC_PROCESS_COUNT
-            //     ) {
-            //     processedPage += 1
-            //     // pageSize = Math.min(totalCount - retrievedCount, constants.PRODUCT_SYNC_STG_TO_AC_BATCH_COUNT);
-            //     productMasters = await productsync.getProductMasters(pageSize, currentPage)
-            //     retrievedCount = retrievedCount + productMasters["items"].length
-            //     attributesMapping = await productsync.updateProductMasterToAc(productMasters["items"], attributesMapping)
-            //     logger.info(`Retrieved ${retrievedCount} products to be processed in page ${processedPage}.`)
-            //     if (processedPage > totalBatches) {
-            //         break;
-            //     }
-            // }
+            //create/update admin contact to ac company.
+            let CompanySuperUserMapping = await compaycontactsync.updateAdminContactToAc(adminContacts["items"], custAdminContactMapping)
+
+            let attributesMapping = await compaycontactsync.updateCompanyToAc(stgCompanies["items"], CompanySuperUserMapping)
+            let processedPage = 1
+            while (
+                retrievedCount < totalCount &&
+                retrievedCount < constants.CC_SYNC_STG_TO_AC_PROCESS_COUNT
+                ) {
+                processedPage += 1
+                contactfilters = [];
+                custAdminContactMapping = {};
+                // pageSize = Math.min(totalCount - retrievedCount, constants.PRODUCT_SYNC_STG_TO_AC_BATCH_COUNT);
+                stgCompanies = await compaycontactsync.getCompanies(pageSize, processedPage)
+                retrievedCount = retrievedCount + stgCompanies["items"].length
+
+
+                stgCompanies.items.forEach(stgCompany => {
+                    custAdminContactMapping[stgCompany.cust_id] = stgCompany.web_admin_contact_id;
+                });
+                logger.info('1111111111111111' + JSON.stringify(custAdminContactMapping))
+                //add admin contact get filter
+                // let syncStatuses = ['N','O','F']
+                // let statusfilter = {
+                //     "field": "sync_status",
+                //     "value": syncStatuses.join(","),
+                //     "condition_type": "in"
+                // };
+                // contactfilters.push(statusfilter);
+                let contactIdfilter = {
+                    "field": "contact_id",
+                    "value": Object.values(custAdminContactMapping).join(','),
+                    "condition_type": "in"
+                };
+                contactfilters.push(contactIdfilter);
+                adminContacts = await compaycontactsync.getContacts(100, 1,contactfilters);
+
+                //create/update admin contact to ac company.
+                CompanySuperUserMapping = await compaycontactsync.updateAdminContactToAc(adminContacts["items"], custAdminContactMapping)
+
+                let attributesMapping = await compaycontactsync.updateCompanyToAc(stgCompanies["items"], CompanySuperUserMapping)
+
+                logger.info(`Retrieved ${retrievedCount} company to be processed in page ${processedPage}.`)
+                if (processedPage > totalBatches) {
+                    break;
+                }
+            }
             // update the process in aio_ac_erp_sync_log to warning, complete, or failed
             process.last_end_dt = new Date().toISOString().slice(0, 19).replace('T', ' ')
             process.sync_status = constants.SYNC_STATUS_COMPLETE

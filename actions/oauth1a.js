@@ -71,7 +71,7 @@ function getOauthClient (options, logger) {
         ...customHeaders
       }
       logger.info(JSON.stringify(requestData.body))
-      logger.info(JSON.stringify(headers))
+      //logger.info(JSON.stringify(headers))
       const response =  await fetch(requestData.url, {
         method: requestData.method,
         headers: {
@@ -80,10 +80,14 @@ function getOauthClient (options, logger) {
         },
         body: JSON.stringify(requestData.body) // 转换 body 为 JSON 字符串
       });
+      //logger.info(JSON.stringify(response.json()))
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorResponse = await response.json(); // 解析 JSON 响应体
+        logger.info(errorResponse)
+        throw new Error(`HTTP error! status: ${errorResponse.message}`);
       }
-      return await response.json(); // 解析 JSON 响应
+
+      return await response.json(); 
 
     } catch (error) {
       logger.error(`Error fetching URL ${requestData.url}: ${error}`)
