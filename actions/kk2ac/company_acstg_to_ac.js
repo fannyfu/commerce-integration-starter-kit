@@ -56,7 +56,18 @@ async function main(params) {
         let currentPage = 1
         // let pageSize = constants.CC_SYNC_STG_TO_AC_BATCH_COUNT
         let pageSize = constants.CC_SYNC_STG_TO_AC_BATCH_COUNT
-        let stgCompanies = await compaycontactsync.getCompanies(pageSize, currentPage)
+
+
+        //add company status filter
+        let syncStatuses = ['N']
+        let companyfilters = []
+        let statusfilter = {
+            "field": "sync_status",
+            "value": syncStatuses.join(","),
+            "condition_type": "in"
+        };
+        companyfilters.push(statusfilter);
+        let stgCompanies = await compaycontactsync.getCompanies(pageSize, currentPage,companyfilters)
         const totalCount = stgCompanies["total_count"];
         const totalBatches = Math.min(totalCount, constants.CC_SYNC_STG_TO_AC_PROCESS_COUNT) / pageSize;
         let retrievedCount = stgCompanies["items"].length;
@@ -91,14 +102,8 @@ async function main(params) {
                 custAdminContactMapping[stgCompany.cust_id] = stgCompany.web_admin_contact_id;
             });
             logger.info('1111111111111111' + JSON.stringify(custAdminContactMapping))
-            //add admin contact get filter
-            // let syncStatuses = ['N']
-            // let statusfilter = {
-            //     "field": "sync_status",
-            //     "value": syncStatuses.join(","),
-            //     "condition_type": "in"
-            // };
-            // contactfilters.push(statusfilter);
+
+            //add contact id filters
             let contactIdfilter = {
                 "field": "contact_id",
                 "value": Object.values(custAdminContactMapping).join(','),
@@ -118,9 +123,20 @@ async function main(params) {
                 ) {
                 processedPage += 1
                 contactfilters = [];
+                companyfilters = [];
                 custAdminContactMapping = {};
                 // pageSize = Math.min(totalCount - retrievedCount, constants.PRODUCT_SYNC_STG_TO_AC_BATCH_COUNT);
-                stgCompanies = await compaycontactsync.getCompanies(pageSize, processedPage)
+
+                //add company status filter
+                let syncStatuses = ['N']
+                let statusfilter = {
+                    "field": "sync_status",
+                    "value": syncStatuses.join(","),
+                    "condition_type": "in"
+                };
+                companyfilters.push(statusfilter);
+
+                stgCompanies = await compaycontactsync.getCompanies(pageSize, processedPage,companyfilters)
                 retrievedCount = retrievedCount + stgCompanies["items"].length
 
 
@@ -128,14 +144,7 @@ async function main(params) {
                     custAdminContactMapping[stgCompany.cust_id] = stgCompany.web_admin_contact_id;
                 });
                 logger.info('1111111111111111' + JSON.stringify(custAdminContactMapping))
-                //add admin contact get filter
-                // let syncStatuses = ['N','O','F']
-                // let statusfilter = {
-                //     "field": "sync_status",
-                //     "value": syncStatuses.join(","),
-                //     "condition_type": "in"
-                // };
-                // contactfilters.push(statusfilter);
+                //add admin contact id filter
                 let contactIdfilter = {
                     "field": "contact_id",
                     "value": Object.values(custAdminContactMapping).join(','),
